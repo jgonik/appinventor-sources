@@ -107,7 +107,6 @@
     <when-type-assignable class="com.google.gwt.user.client.rpc.RemoteService" />
   </generate-with>
 
-  <!-- English language, independent of country -->
-  <extend-property name="locale" values="en"/>
+  <collapse-all-properties/>
 
 </module>
