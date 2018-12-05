@@ -3,7 +3,55 @@
 // Released under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package com.google.appinventor.components.runtime;
+package edu.mit.appinventor.ai.teachablemachine;
+
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.util.Base64;
+import android.util.Log;
+import android.view.WindowManager.LayoutParams;
+import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import com.google.appinventor.components.annotations.DesignerComponent;
+import com.google.appinventor.components.annotations.DesignerProperty;
+import com.google.appinventor.components.annotations.PropertyCategory;
+import com.google.appinventor.components.annotations.SimpleEvent;
+import com.google.appinventor.components.annotations.SimpleFunction;
+import com.google.appinventor.components.annotations.SimpleObject;
+import com.google.appinventor.components.annotations.SimpleProperty;
+import com.google.appinventor.components.annotations.UsesAssets;
+import com.google.appinventor.components.annotations.UsesPermissions;
+import com.google.appinventor.components.common.ComponentCategory;
+import com.google.appinventor.components.common.PropertyTypeConstants;
+import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
+import com.google.appinventor.components.runtime.Component;
+import com.google.appinventor.components.runtime.EventDispatcher;
+import com.google.appinventor.components.runtime.Form;
+import com.google.appinventor.components.runtime.WebViewer;
+import com.google.appinventor.components.runtime.util.ErrorMessages;
+import com.google.appinventor.components.runtime.util.JsonUtil;
+import com.google.appinventor.components.runtime.util.MediaUtil;
+import com.google.appinventor.components.runtime.util.SdkLevel;
+import com.google.appinventor.components.runtime.util.YailList;
+import org.json.JSONArray;
+import org.json.JSONException;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 import android.util.Log;
 import android.view.View;
@@ -27,16 +75,14 @@ import com.google.appinventor.components.runtime.util.YailList;
 import org.json.JSONArray;
 import org.json.JSONException;
 
-import java.io.File;
+import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static android.net.Uri.encode;
 
@@ -47,13 +93,14 @@ import static android.net.Uri.encode;
  * @author kelseyc@mit.edu (Kelsey Chan)
  */
 
-@DesignerComponent(version = YaVersion.TEACHABLEMACHINE_COMPONENT_VERSION,
-        category = ComponentCategory.EXPERIMENTAL,
-        description = "Component for teaching a machine to recognize different images.")
-@SimpleObject
+@DesignerComponent(version = 1,
+        category = ComponentCategory.EXTENSION,
+		   description = "Extension for teaching a machine to recognize different images.",
+        nonVisible = true)
+@SimpleObject(external = true)
 @UsesAssets(fileNames = "teachablemachine.html, teachablemachine.js, group1-shard1of1, group10-shard1of1, group11-shard1of1, group12-shard1of1, group13-shard1of1, group14-shard1of1, group15-shard1of1, group16-shard1of1, group17-shard1of1, group18-shard1of1, group19-shard1of1, group2-shard1of1, group20-shard1of1, group21-shard1of1, group22-shard1of1, group23-shard1of1, group24-shard1of1, group25-shard1of1, group26-shard1of1, group27-shard1of1, group28-shard1of1, group29-shard1of1, group3-shard1of1, group30-shard1of1, group31-shard1of1, group32-shard1of1, group33-shard1of1, group34-shard1of1, group35-shard1of1, group36-shard1of1, group37-shard1of1, group38-shard1of1, group39-shard1of1, group4-shard1of1, group40-shard1of1, group41-shard1of1, group42-shard1of1, group43-shard1of1, group44-shard1of1, group45-shard1of1, group46-shard1of1, group47-shard1of1, group48-shard1of1, group49-shard1of1, group5-shard1of1, group50-shard1of1, group51-shard1of1, group52-shard1of1, group53-shard1of1, group54-shard1of1, group55-shard1of1, group6-shard1of1, group7-shard1of1, group8-shard1of1, group9-shard1of1, model.json, tfjs-0.10.3.js")
 @UsesPermissions(permissionNames = "android.permission.INTERNET, android.permission.CAMERA")
-public final class TeachableMachine extends AndroidViewComponent implements Component {
+public final class TeachableMachine extends AndroidNonvisibleComponent implements Component {
   private static final String LOG_TAG = TeachableMachine.class.getSimpleName();
   private static final String MODEL_DIRECTORY = "/sdcard/AppInventor/assets/TeachableMachine/";
 
@@ -67,55 +114,88 @@ public final class TeachableMachine extends AndroidViewComponent implements Comp
   private static final int ERROR_SAVE_MODEL_FAILED = -5;
   private static final int ERROR_NO_MORE_CLASSES_AVAILABLE = -6;
   private static final int ERROR_LABEL_DOES_NOT_EXIST = -7;
+  private static final int ERROR_WEBVIEWER_REQUIRED = -8;
 
-  private final WebView webview;
+  private WebView webview;
   private final Form form;
 
-  public TeachableMachine(ComponentContainer container) {
+  public TeachableMachine(Form container) {
     super(container);
     this.form = container.$form();
-    webview = new WebView(container.$context());
-    webview.getSettings().setJavaScriptEnabled(true);
-    webview.getSettings().setMediaPlaybackRequiresUserGesture(false);
-    // adds a way to send strings to the javascript
-    webview.addJavascriptInterface(new JsObject(), "TeachableMachine");
-    webview.setWebViewClient(new WebViewClient() {
-      @Override
-      public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-        Log.d(LOG_TAG, "shouldInterceptRequest called");
-        if (url.contains(MODEL_PREFIX)) {
-          Log.d(LOG_TAG, "overriding " + url);
-          try {
-            InputStream inputStream = form.$context().getAssets().open("component/" + url.substring(MODEL_PREFIX.length()));
-            if (url.endsWith(".json")) {
-              return new WebResourceResponse("application/json", "UTF-8", inputStream);
-            } else {
-              return new WebResourceResponse("application/octet-stream", "binary", inputStream);
-            }
-          } catch (IOException e) {
-            e.printStackTrace();
-            return super.shouldInterceptRequest(view, url);
-          }
-        }
-        Log.d(LOG_TAG, url);
-        return super.shouldInterceptRequest(view, url);
-      }
-    });
-    webview.setWebChromeClient(new WebChromeClient() {
-      @Override
-      public void onPermissionRequest(PermissionRequest request) {
-        Log.d(LOG_TAG, "onPermissionRequest called");
-        String[] requestedResources = request.getResources();
-        for (String r : requestedResources) {
-          if (r.equals(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
-            request.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
-          }
-        }
-      }
-    });
-    webview.loadUrl("file:///android_asset/component/teachablemachine.html");
+    requestHardwareAcceleration(container);
     Log.d(LOG_TAG, "Created TeachableMachine component");
-    container.$add(this);
+  }
+  
+  @SuppressLint("SetJavaScriptEnabled")
+  private void configureWebView(WebView webview) {
+	  webview.getSettings().setJavaScriptEnabled(true);
+	  webview.getSettings().setMediaPlaybackRequiresUserGesture(false);
+	    // adds a way to send strings to the javascript
+	  webview.addJavascriptInterface(new JsObject(), "TeachableMachine");
+	  webview.setWebViewClient(new WebViewClient() {
+	      @Override
+	      public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+	        Log.d(LOG_TAG, "shouldInterceptRequest called");
+	        if (url.contains(MODEL_PREFIX)) {
+	          Log.d(LOG_TAG, "overriding " + url);
+	          try {
+	            InputStream inputStream = form.$context().getAssets().open("component/" + url.substring(MODEL_PREFIX.length()));
+	            if (url.endsWith(".json")) {
+	              return new WebResourceResponse("application/json", "UTF-8", inputStream);
+	            } else {
+	              return new WebResourceResponse("application/octet-stream", "binary", inputStream);
+	            }
+	          } catch (IOException e) {
+	            e.printStackTrace();
+	            return super.shouldInterceptRequest(view, url);
+	          }
+	        }
+	        Log.d(LOG_TAG, url);
+	        return super.shouldInterceptRequest(view, url);
+	      }
+	    });
+	  webview.setWebChromeClient(new WebChromeClient() {
+	      @Override
+	      public void onPermissionRequest(PermissionRequest request) {
+	        Log.d(LOG_TAG, "onPermissionRequest called");
+	        String[] requestedResources = request.getResources();
+	        for (String r : requestedResources) {
+	          if (r.equals(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
+	            request.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+	          }
+	        }
+	      }
+	    });
+	  try {
+	    webview.loadUrl(form.getAssetPathForExtension(this, "teachablemachine.html"));
+	  } catch (FileNotFoundException e) {
+        Log.d(LOG_TAG, e.getMessage());
+        e.printStackTrace();
+      }
+  }
+  
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_COMPONENT + ":com.google.appinventor.runtime.components.WebViewer")
+  @SimpleProperty(userVisible = false)
+  public void WebViewer(WebViewer webviewer) {
+	  if (webviewer != null) {
+	    webview = (WebView) webviewer.getView();
+		  configureWebView(webview);
+		  webview.requestLayout();
+		  try {
+			  Log.d(LOG_TAG, "isHardwareAccelerated? " + webview.isHardwareAccelerated());
+			  webview.loadUrl(form.getAssetPathForExtension(this, "teachablemachine.html"));
+		  } catch (FileNotFoundException e) {
+			  Log.d(LOG_TAG, e.getMessage());
+			  e.printStackTrace();
+		  }
+	  }
+  }
+  
+  public void Initialize() {
+	  Log.d(LOG_TAG, "webview = " + webview);
+	  if (webview == null) {
+		  form.dispatchErrorOccurredEvent(this, "WebViewer", ErrorMessages.ERROR_EXTENSION_ERROR, ERROR_WEBVIEWER_REQUIRED, LOG_TAG, "You must specify a WebViewer component in the WebViewer property.");
+	  }
   }
 
   @SimpleFunction(description = "Toggles between user-facing and environment-facing camera.")
@@ -189,6 +269,10 @@ public final class TeachableMachine extends AndroidViewComponent implements Comp
     EventDispatcher.dispatchEvent(this, "Error", errorCode, message);
   }
 
+  private static void requestHardwareAcceleration(Activity activity) {
+    activity.getWindow().setFlags(LayoutParams.FLAG_HARDWARE_ACCELERATED, LayoutParams.FLAG_HARDWARE_ACCELERATED);
+  }
+
   private void saveModel(String name, String model) {
     // save to file system
     String path = MODEL_DIRECTORY + name;
@@ -206,10 +290,6 @@ public final class TeachableMachine extends AndroidViewComponent implements Comp
     DoneSavingModel(name);
   }
 
-  @Override
-  public View getView() {
-    return webview;
-  }
 
   private class JsObject {
     @JavascriptInterface
