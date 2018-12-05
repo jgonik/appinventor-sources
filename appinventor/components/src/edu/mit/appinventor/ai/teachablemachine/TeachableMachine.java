@@ -43,37 +43,15 @@ import org.json.JSONArray;
 import org.json.JSONException;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
 
-import android.util.Log;
 import android.view.View;
-import android.webkit.JavascriptInterface;
-import android.webkit.WebViewClient;
-import android.webkit.WebChromeClient;
-import android.webkit.WebView;
-import android.webkit.PermissionRequest;
-import android.webkit.WebResourceResponse;
-import com.google.appinventor.components.annotations.DesignerComponent;
-import com.google.appinventor.components.annotations.SimpleEvent;
-import com.google.appinventor.components.annotations.SimpleFunction;
-import com.google.appinventor.components.annotations.SimpleObject;
-import com.google.appinventor.components.annotations.UsesAssets;
-import com.google.appinventor.components.annotations.UsesPermissions;
-import com.google.appinventor.components.common.ComponentCategory;
 import com.google.appinventor.components.common.YaVersion;
 import com.google.appinventor.components.runtime.util.IOUtils;
 import com.google.appinventor.components.runtime.util.JsonUtil;
-import com.google.appinventor.components.runtime.util.YailList;
-import org.json.JSONArray;
-import org.json.JSONException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -87,10 +65,11 @@ import java.util.Map;
 import static android.net.Uri.encode;
 
 /**
- * Component for teaching a machine to recognize different images.
+ * Extension for teaching a machine to recognize different images.
  *
  * @author kevinzhu@mit.edu (Kevin Zhu)
  * @author kelseyc@mit.edu (Kelsey Chan)
+ * @author jgonik@mit.edu (Julia Gonik)
  */
 
 @DesignerComponent(version = 1,
